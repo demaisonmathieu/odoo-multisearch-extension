@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<title>Odoo Multi-Search — recherche multi-modèles</title>
+<style>
+/* Shared styling for Chrome Web Store screenshot mockups.
+   The ".oms-*" rules are copied verbatim from overlay.js's injected STYLE so the mockups are
+   pixel-faithful to the real extension UI; the ".fake-*" rules are a generic, fictional Odoo-like
+   backdrop (no real client branding or data) just to give the palette some visual context. */
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  width: 1280px;
+  height: 800px;
+  overflow: hidden;
+  font: 13px/1.4 -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: #f4f2f0;
+}
+
+/* ---- fake Odoo backdrop (fictional data only) ---- */
+.fake-topbar {
+  height: 46px;
+  background: #714b67;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  color: #fff;
+  gap: 20px;
+  font-size: 13px;
+}
+.fake-topbar .fake-logo { font-weight: 700; letter-spacing: 0.5px; opacity: 0.95; }
+.fake-topbar .fake-menu { opacity: 0.85; }
+.fake-topbar .fake-menu.active { opacity: 1; font-weight: 600; }
+.fake-breadcrumb {
+  height: 42px;
+  background: #fff;
+  border-bottom: 1px solid #e3e1df;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  color: #55524f;
+  font-size: 13px;
+  gap: 6px;
+}
+.fake-breadcrumb b { color: #2b2926; }
+.fake-body { padding: 20px; }
+.fake-table {
+  background: #fff;
+  border: 1px solid #e3e1df;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.fake-row {
+  display: grid;
+  grid-template-columns: 2fr 1.2fr 1fr 1fr 1fr;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #efeeec;
+  color: #746f6b;
+  font-size: 12.5px;
+}
+.fake-row.head { color: #a29d98; font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; }
+.fake-row:last-child { border-bottom: none; }
+
+/* ---- real palette CSS (from overlay.js) ---- */
+.oms-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 17, 21, 0.55);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 90px;
+  --bg: #1b1d22;
+  --fg: #e8e8ec;
+  --muted: #9aa0aa;
+  --border: #34373f;
+  --accent: #b48fbd;
+  --accent-fg: #1b1d22;
+  --danger: #e2837a;
+  --hover: #2a2d34;
+}
+.oms-modal {
+  width: 640px;
+  max-height: 72vh;
+  background: var(--bg);
+  color: var(--fg);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.oms-view.hidden { display: none; }
+.oms-search-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.oms-search-row input[type="text"] {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--fg);
+  font-size: 16px;
+}
+.oms-icon-btn {
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 16px;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+.oms-view-toggle {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.oms-view-toggle button {
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 11px;
+  padding: 5px 8px;
+  white-space: nowrap;
+}
+.oms-view-toggle button:first-child { border-right: 1px solid var(--border); }
+.oms-view-toggle button.active { background: var(--accent); color: var(--accent-fg); }
+.oms-advanced { padding: 0 14px; margin-top: 8px; }
+.oms-advanced-rows { display: flex; flex-direction: column; gap: 5px; }
+.oms-advanced-row { display: flex; gap: 5px; }
+.oms-advanced-row input,
+.oms-advanced-row select {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg);
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  padding: 5px 6px;
+  min-width: 0;
+}
+.oms-adv-field { flex: 3; }
+.oms-adv-operator { flex: 1.4; }
+.oms-adv-value { flex: 3; }
+.oms-adv-remove { border: none; background: none; color: var(--muted); font-size: 15px; padding: 0 4px; flex-shrink: 0; }
+.oms-advanced-add-row {
+  margin-top: 6px;
+  border: 1px dashed var(--border);
+  background: none;
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11.5px;
+}
+.oms-advanced-hint { color: var(--muted); font-size: 10.5px; margin-top: 6px; }
+#oms-advanced-search-btn {
+  margin-top: 6px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.oms-models { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px 0; }
+.oms-pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+}
+.oms-pill.checked { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.oms-status { padding: 8px 14px 0; color: var(--muted); font-size: 12px; }
+.oms-status.ok { color: #6fcf7d; }
+.oms-results { padding: 8px 14px 4px; display: flex; flex-direction: column; gap: 6px; }
+.oms-result-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 10px;
+}
+.oms-result-row.zero { opacity: 0.5; }
+.oms-result-model { font-family: ui-monospace, monospace; font-size: 12px; }
+.oms-result-count { color: var(--muted); font-size: 12px; margin-left: 8px; }
+.oms-result-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.oms-result-open {
+  background: var(--accent);
+  color: var(--accent-fg);
+  border: none;
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.oms-result-open.secondary { background: none; color: var(--accent); border: 1px solid var(--accent); }
+.oms-hint { padding: 8px 14px 12px; color: var(--muted); font-size: 11px; }
+.oms-model-picker-hint { padding: 6px 14px 0; color: var(--muted); font-size: 10.5px; }
+.oms-model-picker { padding: 8px 14px; display: flex; flex-direction: column; gap: 2px; }
+.oms-model-row { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 6px; }
+.oms-model-present {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.oms-model-picker .oms-model-name { color: var(--muted); font-size: 11px; }
+.oms-model-picker .oms-badge {
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.oms-model-checked-default { display: flex; align-items: center; gap: 4px; font-size: 10.5px; color: var(--muted); white-space: nowrap; flex-shrink: 0; }
+.oms-editor-actions { display: flex; gap: 8px; padding: 10px 14px 14px; border-top: 1px solid var(--border); }
+.oms-editor-actions button {
+  border-radius: 6px;
+  padding: 7px 12px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--fg);
+}
+.oms-editor-actions button:not(.secondary) { background: var(--accent); color: var(--accent-fg); border: none; }
+
+/* ---- caption banner burned into the screenshot (Chrome Web Store style) ---- */
+.caption-banner {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 84px;
+  background: linear-gradient(180deg, rgba(20,16,24,0) 0%, rgba(20,16,24,0.92) 40%, #1a1420 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  z-index: 10;
+}
+
+</style>
+</head>
+<body>
+
+  <div class="fake-topbar">
+    <span class="fake-logo">⬡ Odoo</span>
+    <span class="fake-menu active">Ventes</span>
+    <span class="fake-menu">Facturation</span>
+    <span class="fake-menu">Inventaire</span>
+    <span class="fake-menu">Projet</span>
+    <span class="fake-menu">CRM</span>
+  </div>
+  <div class="fake-breadcrumb">Ventes / <b>Devis et commandes</b></div>
+  <div class="fake-body">
+    <div class="fake-table">
+      <div class="fake-row head"><span>Client</span><span>Commande</span><span>Date</span><span>Total</span><span>Statut</span></div>
+      <div class="fake-row"><span>Atlas Industries</span><span>S00042</span><span>03/09/2026</span><span>4 250,00 €</span><span>Devis envoyé</span></div>
+      <div class="fake-row"><span>Meridian Corp</span><span>S00041</span><span>02/09/2026</span><span>1 180,00 €</span><span>Commande</span></div>
+      <div class="fake-row"><span>Nordic Freight</span><span>S00040</span><span>01/09/2026</span><span>9 900,00 €</span><span>Facturé</span></div>
+    </div>
+  </div>
+
+  <div class="oms-backdrop">
+    <div class="oms-modal">
+      <div class="oms-view" data-view="search">
+        <div class="oms-search-row">
+          <input type="text" value="Meridian" readonly />
+          <button type="button" class="oms-icon-btn" title="Critères avancés (domaine)">🔧</button>
+          <div class="oms-view-toggle" title="Vue par défaut pour plusieurs résultats">
+            <button type="button">☰ Liste</button>
+            <button type="button" class="active">▦ Kanban</button>
+          </div>
+          <button type="button" class="oms-icon-btn" title="Modèles par défaut">⚙</button>
+        </div>
+        <div class="oms-models">
+          <div class="oms-pill checked">res.partner</div>
+          <div class="oms-pill checked">sale.order</div>
+          <div class="oms-pill checked">account.move</div>
+          <div class="oms-pill checked">project.task</div>
+          <div class="oms-pill">crm.lead</div>
+        </div>
+        <div class="oms-status ok">4 modèle(s) interrogé(s).</div>
+        <div class="oms-results">
+          <div class="oms-result-row">
+            <div><span class="oms-result-model">res.partner</span><span class="oms-result-count">1 résultat</span></div>
+            <div class="oms-result-actions">
+              <button type="button" class="oms-result-open">Ouvrir (kanban)</button>
+              <button type="button" class="oms-result-open secondary">Ouvrir la fiche</button>
+            </div>
+          </div>
+          <div class="oms-result-row">
+            <div><span class="oms-result-model">sale.order</span><span class="oms-result-count">3 résultats</span></div>
+            <div class="oms-result-actions"><button type="button" class="oms-result-open">Ouvrir (kanban)</button></div>
+          </div>
+          <div class="oms-result-row">
+            <div><span class="oms-result-model">account.move</span><span class="oms-result-count">7 résultats</span></div>
+            <div class="oms-result-actions"><button type="button" class="oms-result-open">Ouvrir (kanban)</button></div>
+          </div>
+          <div class="oms-result-row zero">
+            <div><span class="oms-result-model">project.task</span><span class="oms-result-count">0 résultat</span></div>
+          </div>
+        </div>
+        <div class="oms-hint">Échap pour fermer</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="caption-banner">Recherchez un client, une facture ou une tâche sur plusieurs modèles à la fois</div>
+</body>
+</html>

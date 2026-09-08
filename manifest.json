@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "Odoo Multi-Search",
+  "version": "0.2.0",
+  "description": "Recherche multi-critères sur plusieurs modèles Odoo via une palette centrée (façon Ctrl+K), avec ouverture directe des résultats dans l'onglet Odoo actif.",
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Odoo Multi-Search (clic ou raccourci clavier)"
+  },
+  "commands": {
+    "toggle-search": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+K",
+        "mac": "Command+Shift+K"
+      },
+      "description": "Ouvrir/fermer Odoo Multi-Search"
+    }
+  },
+  "permissions": ["activeTab", "scripting", "storage"],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
