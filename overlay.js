@@ -352,7 +352,7 @@
       <div class="oms-modal" id="oms-modal">
         <div class="oms-view" data-view="search">
           <div class="oms-search-row">
-            <input type="text" id="oms-terms" placeholder="Rechercher… (Entrée pour lancer, virgule = OR, vide = tout afficher)" autocomplete="off" />
+            <input type="text" id="oms-terms" placeholder="Rechercher… (Entrée pour lancer, virgule = OR, vide = tout afficher, / = aller à un menu)" autocomplete="off" />
             <button type="button" class="oms-icon-btn" id="oms-advanced-btn" title="Critères avancés (domaine)">🔧</button>
             <div class="oms-view-toggle" id="oms-view-toggle" title="Vue par défaut pour plusieurs résultats">
               <button type="button" data-view-mode="list">☰ Liste</button>
@@ -653,7 +653,13 @@
   }
 
   async function runSearch() {
-    const terms = termsInput.value
+    const rawValue = termsInput.value;
+    // Mirrors Odoo's own Ctrl+K convention: a leading "/" switches to menu navigation instead of
+    // searching records — see env.services.menu in bridge.js.
+    if (rawValue.trim().startsWith("/")) {
+      return runMenuSearch(rawValue.trim().slice(1).trim());
+    }
+    const terms = rawValue
       .split(",")
       .map((t) => t.trim())
       .filter(Boolean);
@@ -678,6 +684,54 @@
     }
     setStatus(`${res.results.length} modèle(s) interrogé(s).`, "ok");
     renderResults(res.results);
+  }
+
+  async function runMenuSearch(term) {
+    setStatus("Recherche de menu…");
+    resultsEl.innerHTML = "";
+    const res = await send({ type: "oms:searchMenus", term });
+    if (res && res.error) {
+      setStatus(res.error, "error");
+      return;
+    }
+    if (!res.menus.length) {
+      setStatus("Aucun menu ne correspond.", "error");
+      return;
+    }
+    setStatus(`${res.menus.length} menu(s) trouvé(s).`, "ok");
+    renderMenuResults(res.menus);
+  }
+
+  function renderMenuResults(menus) {
+    resultsEl.innerHTML = "";
+    for (const menu of menus) {
+      const row = document.createElement("div");
+      row.className = "oms-result-row";
+
+      const pathSpan = document.createElement("span");
+      pathSpan.className = "oms-result-model";
+      pathSpan.textContent = menu.path;
+      row.appendChild(pathSpan);
+
+      const goBtn = document.createElement("button");
+      goBtn.className = "oms-result-open";
+      goBtn.textContent = "Aller à →";
+      goBtn.addEventListener("click", async () => {
+        goBtn.disabled = true;
+        goBtn.textContent = "…";
+        const res = await send({ type: "oms:selectMenu", menuId: menu.id });
+        if (res && res.error) {
+          setStatus(res.error, "error");
+          goBtn.disabled = false;
+          goBtn.textContent = "Aller à →";
+        } else {
+          close();
+        }
+      });
+      row.appendChild(goBtn);
+
+      resultsEl.appendChild(row);
+    }
   }
 
   function showSettingsView() {

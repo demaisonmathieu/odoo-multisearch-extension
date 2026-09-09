@@ -73,6 +73,15 @@ de l'extension pour qu'elle reprenne les nouveaux fichiers.
 5. Un nombre de résultats par modèle s'affiche ; "Ouvrir" navigue directement vers la liste
    filtrée dans l'onglet actif.
 
+### Aller à un menu (comme le Ctrl+K natif d'Odoo)
+
+Tapez `/` suivi d'un terme dans la barre de recherche (ex. `/facture`) puis `Entrée` : la palette
+bascule en recherche de menu au lieu de rechercher des enregistrements, exactement comme le fait
+le Ctrl+K natif d'Odoo avec son préfixe `/`. Les résultats affichent le chemin complet du menu
+(ex. `Facturation / Factures clients`), et "Aller à →" y navigue directement via
+`env.services.menu.selectMenu(...)` — le même service que celui utilisé quand on clique un menu
+dans l'interface standard.
+
 ### Critères avancés (domaine)
 
 L'icône 🔧 à côté de la barre de recherche ouvre un éditeur de critères, une ligne par critère,

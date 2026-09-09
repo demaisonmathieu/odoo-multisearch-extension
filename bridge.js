@@ -63,6 +63,62 @@
 
     // `viewType`: "list" or "kanban" for a multi-record result, ignored (forced to "form") when
     // `resId` is set — used for the single-result case, opening straight on that record's form.
+    // Mirrors Odoo's own Ctrl+K "/" command (addons/web/static/src/webclient/menus/menu_providers.js):
+    // env.services.menu already holds the full menu tree client-side (loaded once at webclient
+    // start), no RPC needed. Builds a parent map ourselves since menusData only has children.
+    searchMenus(term) {
+      const env = getEnv();
+      if (!env) {
+        return { error: "Odoo n'est pas chargé sur cet onglet." };
+      }
+      try {
+        const all = env.services.menu.getAll();
+        const parentOf = new Map();
+        const byId = new Map(all.map((m) => [m.id, m]));
+        for (const m of all) {
+          for (const childId of m.children || []) {
+            parentOf.set(childId, m.id);
+          }
+        }
+        function pathOf(menu) {
+          const parts = [menu.name];
+          let pid = parentOf.get(menu.id);
+          while (pid) {
+            const p = byId.get(pid);
+            if (!p || !p.name) {
+              break;
+            }
+            parts.unshift(p.name);
+            pid = parentOf.get(pid);
+          }
+          return parts.join(" / ");
+        }
+        const t = (term || "").trim().toLowerCase();
+        const menus = all
+          .filter((m) => m && m.actionID && m.name)
+          .map((m) => ({ id: m.id, path: pathOf(m) }))
+          .filter((m) => !t || m.path.toLowerCase().includes(t))
+          .sort((a, b) => a.path.localeCompare(b.path))
+          .slice(0, 50);
+        return { menus };
+      } catch (e) {
+        return { error: describeError(e) };
+      }
+    },
+
+    async selectMenu(menuId) {
+      const env = getEnv();
+      if (!env) {
+        return { error: "Odoo n'est pas chargé sur cet onglet." };
+      }
+      try {
+        await env.services.menu.selectMenu(menuId);
+        return { ok: true };
+      } catch (e) {
+        return { error: describeError(e) };
+      }
+    },
+
     async openList(model, domain, viewType, resId) {
       const env = getEnv();
       if (!env) {

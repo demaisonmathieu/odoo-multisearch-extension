@@ -47,6 +47,8 @@ votre session.
 • Critères avancés : construisez un vrai domaine Odoo (champ / opérateur / valeur), y compris sur
   des champs relationnels comme partner_id.name — sans écrire une ligne de code.
 • Recherche sans critère : listez tous les enregistrements d'un modèle en un clic.
+• Aller à un menu : tapez "/" suivi d'un terme pour naviguer directement vers un menu Odoo,
+  exactement comme le Ctrl+K natif d'Odoo.
 • Modèles par défaut entièrement personnalisables : choisissez ce qui apparaît par défaut parmi
   tous les modèles réellement installés sur votre instance, avec une distinction claire entre
   "présent dans ma liste" et "coché par défaut à l'ouverture".

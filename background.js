@@ -73,6 +73,28 @@ async function listAllModels(tabId) {
   return result;
 }
 
+async function searchMenus(tabId, term) {
+  await ensureBridge(tabId);
+  const [{ result }] = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: "MAIN",
+    func: (term) => window.__oms.searchMenus(term),
+    args: [term],
+  });
+  return result;
+}
+
+async function selectMenu(tabId, menuId) {
+  await ensureBridge(tabId);
+  const [{ result }] = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: "MAIN",
+    func: (menuId) => window.__oms.selectMenu(menuId),
+    args: [menuId],
+  });
+  return result;
+}
+
 function defaultModelsConfig() {
   return Object.fromEntries(DEFAULT_MODELS.map((m) => [m, true]));
 }
@@ -123,6 +145,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           break;
         case "oms:listAllModels":
           sendResponse(await listAllModels(tabId));
+          break;
+        case "oms:searchMenus":
+          sendResponse(await searchMenus(tabId, msg.term));
+          break;
+        case "oms:selectMenu":
+          sendResponse(await selectMenu(tabId, msg.menuId));
           break;
         case "oms:getModels":
           sendResponse({
