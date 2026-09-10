@@ -404,9 +404,29 @@
       color: var(--accent-fg);
       border: none;
     }
+    .oms-settings-tab { display: flex; flex-direction: column; }
+    .oms-settings-tab.hidden { display: none; }
     .oms-alias-section {
       padding: 10px 14px 14px;
-      border-top: 1px solid var(--border);
+    }
+    .oms-alias-edit {
+      border: none;
+      background: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 12px;
+      padding: 0 2px;
+    }
+    .oms-alias-edit:hover { color: var(--accent); }
+    .oms-alias-cancel-edit {
+      border: none;
+      background: none;
+      color: var(--muted);
+      font-size: 11px;
+      cursor: pointer;
+      text-decoration: underline;
+      padding: 0;
+      margin-top: 4px;
     }
     .oms-alias-title {
       font-size: 11px;
@@ -462,21 +482,10 @@
       font-weight: 600;
       cursor: pointer;
     }
-    .oms-alias-domain-input {
-      width: 100%;
-      margin-top: 6px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      background: transparent;
-      color: var(--fg);
-      font-family: ui-monospace, monospace;
-      font-size: 11.5px;
-      padding: 5px 6px;
-    }
-    .oms-alias-error {
-      color: var(--danger);
-      font-size: 11px;
-      margin-top: 4px;
+    .oms-alias-domain-label {
+      font-size: 10.5px;
+      color: var(--muted);
+      margin: 8px 0 4px;
     }
     .oms-alias-chip .oms-alias-domain {
       color: var(--muted);
@@ -524,30 +533,40 @@
         <div class="oms-view hidden" data-view="settings">
           <div class="oms-search-row">
             <button type="button" class="oms-icon-btn" id="oms-back-btn" title="Retour">←</button>
-            <input type="text" id="oms-model-filter" placeholder="Filtrer les modèles (ex: partner, invoice…)" autocomplete="off" />
-          </div>
-          <div class="oms-model-picker-hint" id="oms-model-picker-hint"></div>
-          <div class="oms-model-picker" id="oms-model-picker">Chargement des modèles…</div>
-          <div class="oms-editor-actions">
-            <button type="button" id="oms-save-defaults">Enregistrer par défaut</button>
-            <button type="button" class="secondary" id="oms-reset-defaults">Réinitialiser</button>
-          </div>
-          <div class="oms-alias-section">
-            <div class="oms-alias-title">Alias de modèles (pour /modèle/terme/modèle-lié)</div>
-            <div class="oms-alias-list" id="oms-alias-list"></div>
-            <div class="oms-alias-add-row">
-              <input type="text" id="oms-alias-new-alias" placeholder="alias (ex: projet)" autocomplete="off" />
-              <input type="text" id="oms-alias-new-model" placeholder="modèle (ex: project.project)" autocomplete="off" />
-              <button type="button" id="oms-alias-add-btn">+</button>
+            <div class="oms-view-toggle" id="oms-settings-tabs">
+              <button type="button" data-settings-tab="models">Modèles</button>
+              <button type="button" data-settings-tab="aliases">Alias</button>
             </div>
-            <input
-              type="text"
-              id="oms-alias-new-domain"
-              class="oms-alias-domain-input"
-              placeholder='domaine par défaut, JSON (optionnel) — ex: [["active","=",true]]'
-              autocomplete="off"
-            />
-            <div class="oms-alias-error hidden" id="oms-alias-error"></div>
+          </div>
+          <div class="oms-settings-tab" data-settings-tab-panel="models">
+            <div class="oms-search-row">
+              <input type="text" id="oms-model-filter" placeholder="Filtrer les modèles (ex: partner, invoice…)" autocomplete="off" />
+            </div>
+            <div class="oms-model-picker-hint" id="oms-model-picker-hint"></div>
+            <div class="oms-model-picker" id="oms-model-picker">Chargement des modèles…</div>
+            <div class="oms-editor-actions">
+              <button type="button" id="oms-save-defaults">Enregistrer par défaut</button>
+              <button type="button" class="secondary" id="oms-reset-defaults">Réinitialiser</button>
+            </div>
+          </div>
+          <div class="oms-settings-tab hidden" data-settings-tab-panel="aliases">
+            <div class="oms-alias-section">
+              <div class="oms-alias-title">Alias de modèles (pour /modèle/terme/modèle-lié)</div>
+              <div class="oms-alias-list" id="oms-alias-list"></div>
+              <div class="oms-alias-add-row">
+                <input type="text" id="oms-alias-new-alias" placeholder="alias (ex: projet)" autocomplete="off" />
+                <input type="text" id="oms-alias-new-model" placeholder="modèle (ex: project.project)" autocomplete="off" />
+                <button type="button" id="oms-alias-add-btn">+</button>
+              </div>
+              <div class="oms-alias-domain-label">Domaine par défaut (optionnel)</div>
+              <div class="oms-advanced-rows" id="oms-alias-domain-rows"></div>
+              <button type="button" class="oms-advanced-add-row" id="oms-alias-domain-add-row">
+                + Ajouter un critère de domaine
+              </button>
+              <button type="button" class="oms-alias-cancel-edit hidden" id="oms-alias-cancel-edit">
+                Annuler la modification
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -582,10 +601,14 @@
   const aliasNewAliasInput = shadow.getElementById("oms-alias-new-alias");
   const aliasNewModelInput = shadow.getElementById("oms-alias-new-model");
   const aliasAddBtn = shadow.getElementById("oms-alias-add-btn");
-  const aliasNewDomainInput = shadow.getElementById("oms-alias-new-domain");
-  const aliasErrorEl = shadow.getElementById("oms-alias-error");
+  const aliasDomainRowsEl = shadow.getElementById("oms-alias-domain-rows");
+  const aliasDomainAddRowBtn = shadow.getElementById("oms-alias-domain-add-row");
+  const aliasCancelEditBtn = shadow.getElementById("oms-alias-cancel-edit");
+  const settingsTabsEl = shadow.getElementById("oms-settings-tabs");
+  const settingsTabPanels = shadow.querySelectorAll(".oms-settings-tab");
 
   let modelAliases = {}; // { [normalizedAlias]: model } — user-defined path-search shortcuts
+  let editingAliasKey = null; // set while the alias form holds an existing alias for editing
   let modelsConfig = {}; // { [model]: checkedByDefault } — the user's persisted configuration
   let currentModels = []; // models present in modelsConfig, used for the quick search pills
   let selectedModels = new Set(); // this session's active pill selection (starts from modelsConfig's checked ones)
@@ -620,7 +643,28 @@
     return operators.concat(leaves);
   }
 
+  // A "[...]" value (for the "in"/"not in" operators) is parsed as an array: JSON first, then
+  // with single quotes swapped to double (Python-style, e.g. ['a','b']), then as a last resort a
+  // naive comma-split with each element re-parsed as a scalar — so `[a, b, 3]` still works even
+  // without any quoting at all.
   function parseValue(raw) {
+    const trimmed = raw.trim();
+    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+      try {
+        return JSON.parse(trimmed);
+      } catch (e1) {
+        try {
+          return JSON.parse(trimmed.replace(/'/g, '"'));
+        } catch (e2) {
+          return trimmed
+            .slice(1, -1)
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean)
+            .map(parseValue);
+        }
+      }
+    }
     if (/^'(.*)'$/.test(raw) || /^"(.*)"$/.test(raw)) {
       return raw.slice(1, -1);
     }
@@ -636,7 +680,20 @@
     return raw;
   }
 
-  const ADVANCED_OPERATORS = ["=", "!=", ">", ">=", "<", "<=", "like", "ilike", "not like", "not ilike"];
+  const ADVANCED_OPERATORS = [
+    "=",
+    "!=",
+    ">",
+    ">=",
+    "<",
+    "<=",
+    "like",
+    "ilike",
+    "not like",
+    "not ilike",
+    "in",
+    "not in",
+  ];
 
   function makeOperatorSelect() {
     const select = document.createElement("select");
@@ -770,7 +827,11 @@
   // "partner_id.name") are passed through as-is; Odoo resolves related-field traversal
   // server-side. Splitting field/operator/value into separate inputs avoids the ambiguity of
   // parsing a free-text "field operator value" line (e.g. operator characters inside a value).
-  function addAdvancedRow(initial) {
+  // `getModel()` returns the technical model name field/value suggestions should be computed
+  // against (or null/empty for none) — evaluated fresh on every keystroke/focus, so it stays
+  // correct even as the underlying model selection changes (main search pills, or the alias
+  // editor's own "modèle" input). `onEnter`, if given, runs on Ctrl/Cmd+Enter in either input.
+  function addAdvancedRow(rowsContainer, getModel, initial, onEnter) {
     const row = document.createElement("div");
     row.className = "oms-advanced-row";
 
@@ -781,13 +842,12 @@
     fieldInput.value = (initial && initial.field) || "";
     fieldInput.autocomplete = "off";
 
-    // Field-name suggestions: only offered when exactly one model is selected (fields differ
-    // per model).
+    // Field-name suggestions: only offered when a model is resolved (fields differ per model).
     const fieldWrap = attachSuggestions(fieldInput, async (text) => {
-      if (selectedModels.size !== 1) {
+      const model = getModel();
+      if (!model) {
         return [];
       }
-      const [model] = selectedModels;
       const names = await computeFieldSuggestions(model, text);
       return names.map((n) => ({ value: n, label: n }));
     });
@@ -807,10 +867,10 @@
     // fields via name_search) — depends on which field is currently entered, so it's recomputed
     // from fieldInput.value at the time the value box is used, not tracked reactively.
     const valueWrap = attachSuggestions(valueInput, async (text) => {
-      if (selectedModels.size !== 1 || !fieldInput.value.trim()) {
+      const model = getModel();
+      if (!model || !fieldInput.value.trim()) {
         return [];
       }
-      const [model] = selectedModels;
       const res = await send({
         type: "oms:getFieldValues",
         model,
@@ -834,20 +894,22 @@
     removeBtn.textContent = "×";
     removeBtn.addEventListener("click", () => row.remove());
 
-    for (const input of [fieldInput, valueInput]) {
-      input.addEventListener("keydown", (ev) => {
-        if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)) {
-          ev.preventDefault();
-          runSearch();
-        }
-      });
+    if (onEnter) {
+      for (const input of [fieldInput, valueInput]) {
+        input.addEventListener("keydown", (ev) => {
+          if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)) {
+            ev.preventDefault();
+            onEnter();
+          }
+        });
+      }
     }
 
     row.appendChild(fieldWrap);
     row.appendChild(operatorSelect);
     row.appendChild(valueWrap);
     row.appendChild(removeBtn);
-    advancedRowsEl.appendChild(row);
+    rowsContainer.appendChild(row);
     return row;
   }
 
@@ -866,9 +928,12 @@
   // Rows combine with each other per `advancedCombinator` ("and": implicit, no prefix needed for
   // a flat list — or "or": prefix with enough "|" operators). Empty rows (no field entered) are
   // silently skipped rather than erroring.
-  function buildAdvancedDomain() {
+  // Reads [field, operator, value] leaves out of every ".oms-advanced-row" inside `rowsContainer`
+  // (rows with no field entered are silently skipped) — shared by the main search's advanced
+  // criteria and the alias editor's default-domain rows.
+  function buildDomainFromRows(rowsContainer) {
     const leaves = [];
-    for (const row of advancedRowsEl.querySelectorAll(".oms-advanced-row")) {
+    for (const row of rowsContainer.querySelectorAll(".oms-advanced-row")) {
       const field = row.querySelector(".oms-adv-field").value.trim();
       if (!field) {
         continue;
@@ -877,6 +942,11 @@
       const rawValue = row.querySelector(".oms-adv-value").value.trim();
       leaves.push([field, operator, parseValue(rawValue)]);
     }
+    return leaves;
+  }
+
+  function buildAdvancedDomain() {
+    const leaves = buildDomainFromRows(advancedRowsEl);
     if (advancedCombinator === "or" && leaves.length > 1) {
       const operators = Array(leaves.length - 1).fill("|");
       return { domain: operators.concat(leaves) };
@@ -892,9 +962,23 @@
   // A 20s timeout so a stuck request (background service worker killed mid-flight, a paused
   // debugger, a genuinely slow chain of RPCs) surfaces as an error instead of leaving the UI on
   // "Recherche…" forever with no feedback at all.
+  //
+  // chrome.runtime.sendMessage can also throw *synchronously* (not just reject) when the
+  // extension's context has been invalidated — typically because the palette was already open
+  // when the extension got reloaded in chrome://extensions. That throw happens while building
+  // the Promise.race() call itself, so it isn't caught by the .catch() below unless the call is
+  // wrapped in its own try/catch first.
   function send(message) {
+    let pending;
+    try {
+      pending = chrome.runtime.sendMessage(message);
+    } catch (e) {
+      return Promise.resolve({
+        error: "Extension rechargée depuis l'ouverture de cette palette — fermez-la (Échap) et rouvrez-la.",
+      });
+    }
     return Promise.race([
-      chrome.runtime.sendMessage(message),
+      pending,
       new Promise((_, reject) =>
         setTimeout(() => reject(new Error("Délai dépassé (20s) — l'instance Odoo ne répond pas.")), 20000)
       ),
@@ -1006,10 +1090,16 @@
           ? runOpenById(segments[0].trim(), second)
           : runAliasSearch(segments[0].trim(), second);
       }
-      // "/alias/id-ou-terme/json[/champ]": raw JSON dump, checked before the generic 3-segment
-      // path-search below so "json" isn't mistaken for a related model name.
+      // "/alias/id-ou-terme/json[/champ[/opération]]": raw JSON dump (or, with a 5th segment,
+      // an aggregate: sum/avg/min/max/count) — checked before the generic 3-segment path-search
+      // below so "json" isn't mistaken for a related model name.
       if (segments.length >= 3 && segments[2].trim().toLowerCase() === "json") {
-        return runJsonDump(segments[0].trim(), segments[1].trim(), segments[3] ? segments[3].trim() : null);
+        return runJsonDump(
+          segments[0].trim(),
+          segments[1].trim(),
+          segments[3] ? segments[3].trim() : null,
+          segments[4] ? segments[4].trim() : null
+        );
       }
       if (segments.length >= 3) {
         return runPathSearch(segments);
@@ -1073,7 +1163,8 @@
   async function runAliasSearch(modelAlias, term) {
     setStatus("Recherche en cours…");
     resultsEl.innerHTML = "";
-    const res = await send({ type: "oms:aliasSearch", modelAlias, term });
+    const extraDomain = buildAdvancedDomain().domain;
+    const res = await send({ type: "oms:aliasSearch", modelAlias, term, extraDomain });
     if (res && res.error) {
       setStatus(res.error, "error");
       return;
@@ -1082,10 +1173,11 @@
     renderResults(res.results);
   }
 
-  async function runJsonDump(modelAlias, idOrTerm, fieldName) {
+  async function runJsonDump(modelAlias, idOrTerm, fieldName, operation) {
     setStatus("Récupération…");
     resultsEl.innerHTML = "";
-    const res = await send({ type: "oms:jsonDump", modelAlias, idOrTerm, fieldName });
+    const extraDomain = buildAdvancedDomain().domain;
+    const res = await send({ type: "oms:jsonDump", modelAlias, idOrTerm, fieldName, operation, extraDomain });
     if (res && res.error) {
       setStatus(res.error, "error");
       return;
@@ -1124,7 +1216,8 @@
   async function runPathSearch(segments) {
     setStatus("Recherche…");
     resultsEl.innerHTML = "";
-    const res = await send({ type: "oms:pathSearch", segments });
+    const extraDomain = buildAdvancedDomain().domain;
+    const res = await send({ type: "oms:pathSearch", segments, extraDomain });
     if (res && res.error) {
       setStatus(res.error, "error");
       return;
@@ -1212,9 +1305,26 @@
   function showSettingsView() {
     searchView.classList.add("hidden");
     settingsView.classList.remove("hidden");
-    modelFilterInput.value = "";
-    modelFilterInput.focus();
-    loadModelPicker();
+    showSettingsTab("models");
+  }
+
+  function showSettingsTab(tab) {
+    for (const btn of settingsTabsEl.querySelectorAll("button")) {
+      btn.classList.toggle("active", btn.dataset.settingsTab === tab);
+    }
+    for (const panel of settingsTabPanels) {
+      panel.classList.toggle("hidden", panel.dataset.settingsTabPanel !== tab);
+    }
+    if (tab === "models") {
+      modelFilterInput.value = "";
+      modelFilterInput.focus();
+      loadModelPicker();
+    } else {
+      if (!aliasDomainRowsEl.querySelector(".oms-advanced-row")) {
+        addAdvancedRow(aliasDomainRowsEl, getAliasEditorModel);
+      }
+      aliasNewAliasInput.focus();
+    }
   }
 
   function showSearchView() {
@@ -1371,6 +1481,14 @@
         domainSpan.textContent = JSON.stringify(domain);
         chip.appendChild(domainSpan);
       }
+      const editBtn = document.createElement("button");
+      editBtn.type = "button";
+      editBtn.className = "oms-alias-edit";
+      editBtn.title = "Modifier cet alias";
+      editBtn.textContent = "✎";
+      editBtn.addEventListener("click", () => startEditingAlias(alias, model, domain));
+      chip.appendChild(editBtn);
+
       const removeBtn = document.createElement("button");
       removeBtn.type = "button";
       removeBtn.className = "oms-alias-remove";
@@ -1378,12 +1496,57 @@
       removeBtn.textContent = "×";
       removeBtn.addEventListener("click", async () => {
         delete modelAliases[alias];
+        if (editingAliasKey === alias) {
+          cancelEditingAlias();
+        }
         await send({ type: "oms:setAliases", aliases: modelAliases });
         renderAliasList();
       });
       chip.appendChild(removeBtn);
       aliasListEl.appendChild(chip);
     }
+  }
+
+  // A leaf's stored value (already a real string/number/boolean/array) needs to become editable
+  // text that parseValue() will read back to the same value on save.
+  function valueToInputString(v) {
+    if (Array.isArray(v)) {
+      return JSON.stringify(v);
+    }
+    if (typeof v === "string") {
+      return v;
+    }
+    return String(v);
+  }
+
+  function startEditingAlias(alias, model, domain) {
+    editingAliasKey = alias;
+    aliasNewAliasInput.value = alias;
+    aliasNewModelInput.value = model;
+    aliasDomainRowsEl.innerHTML = "";
+    if (domain.length) {
+      for (const [field, operator, value] of domain) {
+        addAdvancedRow(aliasDomainRowsEl, getAliasEditorModel, {
+          field,
+          operator,
+          value: valueToInputString(value),
+        });
+      }
+    } else {
+      addAdvancedRow(aliasDomainRowsEl, getAliasEditorModel);
+    }
+    aliasCancelEditBtn.classList.remove("hidden");
+    aliasAddBtn.textContent = "✓";
+    aliasNewAliasInput.focus();
+  }
+
+  function cancelEditingAlias() {
+    editingAliasKey = null;
+    aliasNewAliasInput.value = "";
+    aliasNewModelInput.value = "";
+    aliasDomainRowsEl.innerHTML = "";
+    aliasCancelEditBtn.classList.add("hidden");
+    aliasAddBtn.textContent = "+";
   }
 
   async function init() {
@@ -1416,6 +1579,8 @@
     }
   }
 
+  const JSON_OPERATIONS = ["sum", "avg", "min", "max", "count"];
+
   // Suggestions for the path-search syntax typed directly in the main search field
   // (/modèle/terme/modèle-lié): segment 0 (the first model) suggests user-defined aliases and
   // model display names; segment 2 (the related model) suggests models — from a bounded
@@ -1447,8 +1612,9 @@
       return [...aliasMatches, ...modelMatches].slice(0, 30);
     }
 
-    if (segIndex === 2) {
-      const candidateModels = Array.from(new Set([...COMMON_MODELS, ...Object.values(modelAliases)]));
+    if (segIndex === 2 && segments[2].trim().toLowerCase() !== "json") {
+      const aliasModels = Object.values(modelAliases).map((v) => (typeof v === "string" ? v : v.model));
+      const candidateModels = Array.from(new Set([...COMMON_MODELS, ...aliasModels]));
       const res = await send({
         type: "oms:suggestChildModels",
         parentAlias: segments[0],
@@ -1456,6 +1622,25 @@
         partial,
       });
       return (res && res.models) || [];
+    }
+
+    // "/alias/id-ou-terme/json/champ": suggest field names (including relational, one hop at a
+    // time) of the model resolved from segment 0 — reuses the same logic as the advanced
+    // criteria's field autocomplete, just against a path-resolved model instead of the search
+    // pills' selection.
+    if (segIndex === 3 && segments[2].trim().toLowerCase() === "json") {
+      const res = await send({ type: "oms:resolveAlias", alias: segments[0] });
+      if (!res || !res.model) {
+        return [];
+      }
+      const names = await computeFieldSuggestions(res.model, partial);
+      return names.map((n) => ({ value: n, label: n }));
+    }
+
+    // "/alias/id-ou-terme/json/champ/opération": suggest the supported aggregates.
+    if (segIndex === 4 && segments[2].trim().toLowerCase() === "json") {
+      const t = partial.toLowerCase();
+      return JSON_OPERATIONS.filter((o) => !t || o.includes(t)).map((o) => ({ value: o, label: o }));
     }
 
     return []; // segment 1 is a free-text search term, nothing to suggest
@@ -1480,8 +1665,12 @@
     }
   });
 
+  function getSearchModel() {
+    return selectedModels.size === 1 ? Array.from(selectedModels)[0] : null;
+  }
+
   advancedAddRowBtn.addEventListener("click", () => {
-    const row = addAdvancedRow();
+    const row = addAdvancedRow(advancedRowsEl, getSearchModel, undefined, runSearch);
     row.querySelector(".oms-adv-field").focus();
   });
 
@@ -1500,7 +1689,7 @@
     advancedPanel.classList.toggle("hidden");
     if (!advancedPanel.classList.contains("hidden")) {
       if (!advancedRowsEl.querySelector(".oms-advanced-row")) {
-        addAdvancedRow();
+        addAdvancedRow(advancedRowsEl, getSearchModel, undefined, runSearch);
       }
       advancedRowsEl.querySelector(".oms-adv-field").focus();
     }
@@ -1526,6 +1715,14 @@
 
   settingsBtn.addEventListener("click", showSettingsView);
   backBtn.addEventListener("click", showSearchView);
+
+  settingsTabsEl.addEventListener("click", (ev) => {
+    const btn = ev.target.closest("button[data-settings-tab]");
+    if (!btn) {
+      return;
+    }
+    showSettingsTab(btn.dataset.settingsTab);
+  });
   modelFilterInput.addEventListener("input", () => renderModelPicker(modelFilterInput.value));
 
   saveDefaultsBtn.addEventListener("click", async () => {
@@ -1567,35 +1764,36 @@
   aliasModelWrap.classList.add("oms-alias-model-wrap");
   aliasAddBtn.parentNode.insertBefore(aliasModelWrap, aliasAddBtn);
 
+  // The alias editor's default-domain rows are field/operator/value like the main advanced
+  // criteria, but suggestions are computed against whichever model is currently typed in
+  // aliasNewModelInput (evaluated fresh each time, so it updates live as that field changes).
+  function getAliasEditorModel() {
+    return aliasNewModelInput.value.trim() || null;
+  }
+
+  aliasDomainAddRowBtn.addEventListener("click", () => {
+    const row = addAdvancedRow(aliasDomainRowsEl, getAliasEditorModel);
+    row.querySelector(".oms-adv-field").focus();
+  });
+
   aliasAddBtn.addEventListener("click", async () => {
     const aliasRaw = aliasNewAliasInput.value.trim();
     const modelRaw = aliasNewModelInput.value.trim();
-    const domainRaw = aliasNewDomainInput.value.trim();
     if (!aliasRaw || !modelRaw) {
       return;
     }
-    let domain = [];
-    if (domainRaw) {
-      try {
-        domain = JSON.parse(domainRaw);
-        if (!Array.isArray(domain)) {
-          throw new Error("doit être un tableau, ex: [[\"active\",\"=\",true]]");
-        }
-      } catch (e) {
-        aliasErrorEl.textContent = "Domaine JSON invalide : " + ((e && e.message) || e);
-        aliasErrorEl.classList.remove("hidden");
-        return;
-      }
-    }
-    aliasErrorEl.classList.add("hidden");
+    const domain = buildDomainFromRows(aliasDomainRowsEl);
     const key = normalizeAliasKey(aliasRaw);
+    if (editingAliasKey && editingAliasKey !== key) {
+      delete modelAliases[editingAliasKey];
+    }
     modelAliases[key] = domain.length ? { model: modelRaw, domain } : modelRaw;
     await send({ type: "oms:setAliases", aliases: modelAliases });
-    aliasNewAliasInput.value = "";
-    aliasNewModelInput.value = "";
-    aliasNewDomainInput.value = "";
+    cancelEditingAlias();
     renderAliasList();
   });
+
+  aliasCancelEditBtn.addEventListener("click", () => cancelEditingAlias());
 
   // Trap keyboard input so the underlying page (and its own shortcuts, e.g. Odoo's Ctrl+K)
   // doesn't react while the overlay is open. This must run in the BUBBLE phase: a capture-phase

@@ -100,7 +100,7 @@ Un chemin à exactement 2 segments se comporte différemment selon ce que contie
   d'abord, puis nom affiché) — utile pour cibler un modèle précis sans avoir à le cocher/décocher
   parmi les pastilles.
 
-### Export JSON : `/alias/id-ou-terme/json[/champ]`
+### Export JSON : `/alias/id-ou-terme/json[/champ[/opération]]`
 
 Ajoutez `/json` après un ID ou un terme de recherche pour afficher le(s) résultat(s) en JSON brut
 (toutes les valeurs de champs) au lieu du rendu habituel, avec un bouton "Copier". Ajoutez encore
@@ -115,6 +115,19 @@ Ajoutez `/json` après un ID ou un terme de recherche pour afficher le(s) résul
 
 Les champs de type `binary` (images, pièces jointes...) sont exclus du dump "tous les champs"
 (base64 illisible), sauf si demandés explicitement par leur nom.
+
+Le segment `/champ` bénéficie de l'autocomplétion (y compris relationnelle, ex.
+`partner_id.name`), résolue à partir du modèle du 1ᵉʳ segment.
+
+Un 5ᵉ segment optionnel calcule une **agrégation** sur ce champ au lieu d'en lister les valeurs
+brutes : `sum`, `avg`, `min`, `max` (numériques — les valeurs non numériques sont ignorées) ou
+`count` (nombre d'enregistrements correspondants, quel que soit le champ). Contrairement au dump
+brut (limité à 50 résultats), l'agrégation porte sur **tous** les enregistrements correspondants
+(jusqu'à 10 000), pour un résultat représentatif :
+
+- `/facture/2024/json/amount_total/sum` → somme du total de toutes les factures dont le nom
+  contient "2024".
+- `/facture/2024/json/amount_total/count` → nombre de factures correspondantes.
 
 ### Recherche liée : `/modèle/terme/modèle-lié`
 
@@ -145,27 +158,38 @@ many2one vers le modèle résolu au 1ᵉʳ segment (ex. après `/projets/phenix/
 — cette recherche de candidats est limitée aux modèles courants et à vos alias, pas à
 l'intégralité des modèles installés, pour rester rapide).
 
-**Alias personnalisés** : dans le sélecteur de modèles (⚙), une section "Alias de modèles" permet
-de définir des raccourcis (ex. `projet` → `project.project`) utilisés en priorité sur la
+**Alias personnalisés** : le sélecteur (⚙) a deux onglets, "Modèles" et "Alias". L'onglet Alias
+permet de définir des raccourcis (ex. `projet` → `project.project`) utilisés en priorité sur la
 résolution automatique par nom affiché — utile pour un raccourci plus court, ou pour lever une
-ambiguïté entre plusieurs modèles au nom proche. Stockés dans `chrome.storage.sync`, donc partagés
+ambiguïté entre plusieurs modèles au nom proche. Cliquer sur ✎ sur un alias existant recharge son
+alias/modèle/domaine dans le formulaire pour le modifier ("Annuler la modification" pour
+abandonner) ; `×` le supprime directement. Stockés dans `chrome.storage.sync`, donc partagés
 comme le reste de la configuration.
 
-Un champ optionnel **"domaine par défaut"** (en JSON, ex. `[["active","=",true]]`) peut être
-associé à un alias : ce domaine est alors systématiquement combiné en ET avec la recherche,
-partout où l'alias est utilisé (`/alias/id`, `/alias/terme`, ou comme 1ᵉʳ/3ᵉ segment d'une
-recherche liée) — utile par ex. pour qu'un alias `client` ne cible que les partenaires actifs et
-marqués client (`[["active","=",true],["customer_rank",">",0]]`), sans avoir à le retaper à
-chaque recherche.
+Un **domaine par défaut** optionnel peut être associé à un alias, via le même éditeur de critères
+(champ / opérateur / valeur) que celui des critères avancés — "+ Ajouter un critère de domaine"
+sous les champs alias/modèle. Ce domaine est alors systématiquement combiné en ET avec la
+recherche, partout où l'alias est utilisé (`/alias/id`, `/alias/terme`, ou comme 1ᵉʳ/3ᵉ segment
+d'une recherche liée) — utile par ex. pour qu'un alias `client` ne cible que les partenaires
+actifs et marqués client, sans avoir à retaper ces critères à chaque recherche.
+
+L'autocomplétion des champs et valeurs de ce domaine est **dynamique** : elle se base sur le
+modèle actuellement saisi dans le champ "modèle" juste au-dessus, et se met à jour automatiquement
+si vous le changez — avant d'avoir tapé un modèle valide, ou avec un modèle qui ne correspond à
+rien de connu, elle reste simplement vide (rien à suggérer).
+
+Les opérateurs `in`/`not in` prennent une valeur en tableau (ex. `[1,2,3]` ou `['a','b']`) ; comme
+pour le domaine, JSON strict, guillemets simples et absence de guillemets sont tous acceptés.
 
 ### Critères avancés (domaine)
 
 L'icône 🔧 à côté de la barre de recherche ouvre un éditeur de critères, une ligne par critère,
 chacune avec **3 champs séparés** : champ (texte libre, ex. `partner_id.name` — les chemins
 pointés vers un champ relationnel sont transmis tels quels, Odoo résout la traversée côté
-serveur), opérateur (`=`, `!=`, `>`, `>=`, `<`, `<=`, `like`, `ilike`, `not like`, `not ilike`, en
-liste déroulante) et valeur (texte libre). "+ Ajouter un critère" ajoute une ligne, `×` la
-supprime.
+serveur), opérateur (`=`, `!=`, `>`, `>=`, `<`, `<=`, `like`, `ilike`, `not like`, `not ilike`,
+`in`, `not in`, en liste déroulante) et valeur (texte libre — un tableau JSON, guillemets simples
+ou nombres/chaînes non guillemetés pour `in`/`not in`, ex. `[1,2,3]`). "+ Ajouter un critère"
+ajoute une ligne, `×` la supprime.
 
 Un sélecteur **ET / OU** (à côté de "+ Ajouter un critère") définit comment les lignes se
 combinent *entre elles* : toutes doivent correspondre (ET) ou au moins une (OU). Ce choix
@@ -173,7 +197,12 @@ s'applique globalement à toutes les lignes du domaine avancé (pas de groupes m
 imbriqués) — pour des combinaisons plus complexes, mieux vaut composer plusieurs recherches
 successives. Le domaine avancé ainsi obtenu reste toujours combiné en **ET** avec le terme de
 recherche simple de la barre du haut, s'il est aussi renseigné (qui reste en OR entre ses propres
-valeurs séparées par virgule).
+valeurs séparées par virgule) — et aussi avec les syntaxes `/...` (`/alias/terme`,
+`/alias/terme/json...`, et le modèle "parent" d'une recherche liée) : les critères saisis dans ce
+panneau s'appliquent donc quelle que soit la façon dont la recherche est lancée. Ils ne
+s'appliquent en revanche pas à une ouverture directe par ID (`/alias/42`), ni au modèle "lié"
+d'une recherche liée (3ᵉ segment), pour lesquels un domaine issu d'un autre modèle n'aurait pas
+de sens.
 
 Les valeurs numériques et `true`/`false` sont castées automatiquement, tout le reste est traité
 comme chaîne brute (les guillemets restent acceptés mais ne sont plus nécessaires puisque le

@@ -95,14 +95,14 @@ async function getFieldValues(tabId, model, fieldPath, term) {
   return result;
 }
 
-async function pathSearch(tabId, segments) {
+async function pathSearch(tabId, segments, extraDomain) {
   await ensureBridge(tabId);
   const aliases = await getStoredAliases();
   const [{ result }] = await chrome.scripting.executeScript({
     target: { tabId },
     world: "MAIN",
-    func: (segments, aliases) => window.__oms.pathSearch(segments, aliases),
-    args: [segments, aliases],
+    func: (segments, aliases, extraDomain) => window.__oms.pathSearch(segments, aliases, extraDomain),
+    args: [segments, aliases, extraDomain || []],
   });
   return result;
 }
@@ -119,26 +119,40 @@ async function openByAlias(tabId, modelAlias, id) {
   return result;
 }
 
-async function aliasSearch(tabId, modelAlias, term) {
+async function aliasSearch(tabId, modelAlias, term, extraDomain) {
   await ensureBridge(tabId);
   const aliases = await getStoredAliases();
   const [{ result }] = await chrome.scripting.executeScript({
     target: { tabId },
     world: "MAIN",
-    func: (modelAlias, term, aliases) => window.__oms.aliasSearch(modelAlias, term, aliases),
-    args: [modelAlias, term, aliases],
+    func: (modelAlias, term, aliases, extraDomain) =>
+      window.__oms.aliasSearch(modelAlias, term, aliases, extraDomain),
+    args: [modelAlias, term, aliases, extraDomain || []],
   });
   return result;
 }
 
-async function jsonDump(tabId, modelAlias, idOrTerm, fieldName) {
+async function jsonDump(tabId, modelAlias, idOrTerm, fieldName, operation, extraDomain) {
   await ensureBridge(tabId);
   const aliases = await getStoredAliases();
   const [{ result }] = await chrome.scripting.executeScript({
     target: { tabId },
     world: "MAIN",
-    func: (modelAlias, idOrTerm, fieldName, aliases) => window.__oms.jsonDump(modelAlias, idOrTerm, fieldName, aliases),
-    args: [modelAlias, idOrTerm, fieldName ?? null, aliases],
+    func: (modelAlias, idOrTerm, fieldName, operation, aliases, extraDomain) =>
+      window.__oms.jsonDump(modelAlias, idOrTerm, fieldName, operation, aliases, extraDomain),
+    args: [modelAlias, idOrTerm, fieldName ?? null, operation ?? null, aliases, extraDomain || []],
+  });
+  return result;
+}
+
+async function resolveAlias(tabId, alias) {
+  await ensureBridge(tabId);
+  const aliases = await getStoredAliases();
+  const [{ result }] = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: "MAIN",
+    func: (alias, aliasMap) => window.__oms.resolveAlias(alias, aliasMap),
+    args: [alias, aliases],
   });
   return result;
 }
@@ -247,16 +261,21 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           sendResponse(await getFieldValues(tabId, msg.model, msg.fieldPath, msg.term));
           break;
         case "oms:pathSearch":
-          sendResponse(await pathSearch(tabId, msg.segments));
+          sendResponse(await pathSearch(tabId, msg.segments, msg.extraDomain));
           break;
         case "oms:openByAlias":
           sendResponse(await openByAlias(tabId, msg.modelAlias, msg.id));
           break;
         case "oms:aliasSearch":
-          sendResponse(await aliasSearch(tabId, msg.modelAlias, msg.term));
+          sendResponse(await aliasSearch(tabId, msg.modelAlias, msg.term, msg.extraDomain));
           break;
         case "oms:jsonDump":
-          sendResponse(await jsonDump(tabId, msg.modelAlias, msg.idOrTerm, msg.fieldName));
+          sendResponse(
+            await jsonDump(tabId, msg.modelAlias, msg.idOrTerm, msg.fieldName, msg.operation, msg.extraDomain)
+          );
+          break;
+        case "oms:resolveAlias":
+          sendResponse(await resolveAlias(tabId, msg.alias));
           break;
         case "oms:suggestChildModels":
           sendResponse(await suggestChildModels(tabId, msg.parentAlias, msg.candidateModels, msg.partial));

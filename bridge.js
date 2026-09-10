@@ -190,7 +190,11 @@
     // "/alias/nomprojet" (2 segments, 2nd one not purely numeric — see openByAlias for the
     // numeric-id case) -> an ilike search on display_name, scoped to that one resolved model.
     // Returns the same shape as search() above so the overlay can render it identically.
-    async aliasSearch(modelAlias, term, aliasMap) {
+    // `extraDomain`, when given, is the overlay's advanced-criteria panel domain (built from the
+    // field/operator/value rows, on whatever single model those were entered against) — AND'ed
+    // in on top, so those criteria aren't silently ignored just because the search was triggered
+    // via "/alias/term" instead of the plain multi-model search box.
+    async aliasSearch(modelAlias, term, aliasMap, extraDomain) {
       const env = getEnv();
       if (!env) {
         return { error: "Odoo n'est pas chargé sur cet onglet." };
@@ -205,7 +209,8 @@
           return { error: `Aucun modèle ne correspond à "${modelAlias}".` };
         }
         const aliasDomain = (getAliasEntry(modelAlias, aliasMap) || {}).domain || [];
-        return await this.search([model], [["display_name", "ilike", term]].concat(aliasDomain));
+        const domain = [["display_name", "ilike", term]].concat(aliasDomain).concat(extraDomain || []);
+        return await this.search([model], domain);
       } catch (e) {
         return { error: describeError(e) };
       }
@@ -216,7 +221,15 @@
     // object) — a single value for the numeric-id form, an array of values for the term-search
     // form (since that can match several records). Binary fields are excluded from the
     // "all fields" dump (illegible base64 blobs) unless explicitly requested by name.
-    async jsonDump(modelAlias, idOrTerm, fieldName, aliasMap) {
+    // `operation`, when given, requires `fieldName` too (it's the 5th path segment, after the
+    // field) and replaces the raw value(s) with a single aggregate: sum/avg/min/max (numeric —
+    // non-numeric values are dropped rather than erroring) or count (number of matching records,
+    // regardless of the field's content). Computed client-side over the actual fetched records
+    // rather than via read_group, since read_group's result shape (e.g. the group-count key)
+    // isn't stable across Odoo versions — see nameSearchAnyVersion above for the same rationale.
+    // `extraDomain`: see aliasSearch above — same idea, applied to the term-search branch only
+    // (a direct numeric-id lookup bypasses domain filtering entirely, same as openByAlias).
+    async jsonDump(modelAlias, idOrTerm, fieldName, operation, aliasMap, extraDomain) {
       const env = getEnv();
       if (!env) {
         return { error: "Odoo n'est pas chargé sur cet onglet." };
@@ -238,9 +251,14 @@
         if (isSingleId) {
           ids = [Number(trimmed)];
         } else {
-          const domain = [["display_name", "ilike", trimmed]].concat(aliasDomain);
-          ids = await env.services.orm.search(model, domain, { limit: 50 });
+          const domain = [["display_name", "ilike", trimmed]].concat(aliasDomain).concat(extraDomain || []);
+          // An aggregate should cover every match, not just the first page shown for browsing —
+          // capped well above any reasonable dataset rather than left fully unbounded.
+          ids = await env.services.orm.search(model, domain, { limit: operation ? 10000 : 50 });
           if (!ids.length) {
+            if (operation) {
+              return { json: operation === "count" ? 0 : null };
+            }
             return { json: isSingleId ? null : [] };
           }
         }
@@ -259,6 +277,31 @@
         }
 
         const records = await env.services.orm.read(model, ids, fields);
+
+        if (operation) {
+          if (operation === "count") {
+            return { json: records.length };
+          }
+          const values = records
+            .map((r) => (Object.prototype.hasOwnProperty.call(r, fieldName) ? r[fieldName] : null))
+            .filter((v) => typeof v === "number");
+          if (!values.length) {
+            return { json: null };
+          }
+          switch (operation) {
+            case "sum":
+              return { json: values.reduce((a, b) => a + b, 0) };
+            case "avg":
+              return { json: values.reduce((a, b) => a + b, 0) / values.length };
+            case "min":
+              return { json: Math.min(...values) };
+            case "max":
+              return { json: Math.max(...values) };
+            default:
+              return { error: `Opération inconnue : "${operation}" (attendu : sum, avg, min, max, count).` };
+          }
+        }
+
         if (fieldName) {
           const values = records.map((r) => (Object.prototype.hasOwnProperty.call(r, fieldName) ? r[fieldName] : null));
           return { json: isSingleId ? (values.length ? values[0] : null) : values };
@@ -287,6 +330,18 @@
       } catch (e) {
         return { error: describeError(e) };
       }
+    },
+
+    // Resolves a path-search alias/model segment to a real technical model name, for the overlay
+    // to then run its own client-side field-suggestion logic against (e.g. autocompleting the
+    // "/champ" segment of "/alias/id/json/champ").
+    async resolveAlias(alias, aliasMap) {
+      const modelsRes = await this.listModels();
+      if (modelsRes.error) {
+        return modelsRes;
+      }
+      const model = resolveModelAlias(alias, modelsRes.models, aliasMap);
+      return { model: model || null };
     },
 
     // Used to suggest field names (including relational ones, one hop at a time) while typing a
@@ -497,7 +552,10 @@
     // the "/"-split path with the leading empty string already removed by the caller, e.g.
     // ["projets", "sprinter", "taches"]. Model aliases are resolved from ir.model's own display
     // name (see resolveModelAlias above) — no hardcoded per-language dictionary.
-    async pathSearch(segments, aliasMap) {
+    // `extraDomain`: see aliasSearch above — applied only to the parent-model search (segment 0),
+    // since that's the single unambiguous "searched" model; the child model (segment 2) may not
+    // even share those fields.
+    async pathSearch(segments, aliasMap, extraDomain) {
       const env = getEnv();
       if (!env) {
         return { error: "Odoo n'est pas chargé sur cet onglet." };
@@ -542,7 +600,7 @@
 
         const parents = await env.services.orm.searchRead(
           parentModel,
-          [["display_name", "ilike", term]].concat(parentAliasDomain),
+          [["display_name", "ilike", term]].concat(parentAliasDomain).concat(extraDomain || []),
           ["display_name"],
           { limit: 50 }
         );
