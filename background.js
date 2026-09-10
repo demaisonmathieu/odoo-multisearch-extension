@@ -73,6 +73,65 @@ async function listAllModels(tabId) {
   return result;
 }
 
+async function getFields(tabId, model) {
+  await ensureBridge(tabId);
+  const [{ result }] = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: "MAIN",
+    func: (model) => window.__oms.getFields(model),
+    args: [model],
+  });
+  return result;
+}
+
+async function getFieldValues(tabId, model, fieldPath, term) {
+  await ensureBridge(tabId);
+  const [{ result }] = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: "MAIN",
+    func: (model, fieldPath, term) => window.__oms.getFieldValues(model, fieldPath, term),
+    args: [model, fieldPath, term ?? ""],
+  });
+  return result;
+}
+
+async function pathSearch(tabId, segments) {
+  await ensureBridge(tabId);
+  const aliases = await getStoredAliases();
+  const [{ result }] = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: "MAIN",
+    func: (segments, aliases) => window.__oms.pathSearch(segments, aliases),
+    args: [segments, aliases],
+  });
+  return result;
+}
+
+async function openByAlias(tabId, modelAlias, id) {
+  await ensureBridge(tabId);
+  const aliases = await getStoredAliases();
+  const [{ result }] = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: "MAIN",
+    func: (modelAlias, id, aliases) => window.__oms.openByAlias(modelAlias, id, aliases),
+    args: [modelAlias, id, aliases],
+  });
+  return result;
+}
+
+async function suggestChildModels(tabId, parentAlias, candidateModels, partial) {
+  await ensureBridge(tabId);
+  const aliases = await getStoredAliases();
+  const [{ result }] = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: "MAIN",
+    func: (parentAlias, aliasMap, candidateModels, partial) =>
+      window.__oms.suggestChildModels(parentAlias, aliasMap, candidateModels, partial),
+    args: [parentAlias, aliases, candidateModels, partial ?? ""],
+  });
+  return result;
+}
+
 async function searchMenus(tabId, term) {
   await ensureBridge(tabId);
   const [{ result }] = await chrome.scripting.executeScript({
@@ -119,6 +178,17 @@ async function setStoredModelsConfig(modelsConfig) {
   await chrome.storage.sync.remove("models");
 }
 
+// `modelAliases` is { [normalizedAlias]: model } — user-defined shortcuts for path-search model
+// segments (e.g. "projet" -> "project.project"), checked before the fuzzy display-name match.
+async function getStoredAliases() {
+  const { modelAliases } = await chrome.storage.sync.get("modelAliases");
+  return modelAliases && typeof modelAliases === "object" ? modelAliases : {};
+}
+
+async function setStoredAliases(modelAliases) {
+  await chrome.storage.sync.set({ modelAliases });
+}
+
 async function getStoredViewMode() {
   const { viewMode } = await chrome.storage.sync.get("viewMode");
   return viewMode === "kanban" ? "kanban" : "list";
@@ -146,6 +216,21 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         case "oms:listAllModels":
           sendResponse(await listAllModels(tabId));
           break;
+        case "oms:getFields":
+          sendResponse(await getFields(tabId, msg.model));
+          break;
+        case "oms:getFieldValues":
+          sendResponse(await getFieldValues(tabId, msg.model, msg.fieldPath, msg.term));
+          break;
+        case "oms:pathSearch":
+          sendResponse(await pathSearch(tabId, msg.segments));
+          break;
+        case "oms:openByAlias":
+          sendResponse(await openByAlias(tabId, msg.modelAlias, msg.id));
+          break;
+        case "oms:suggestChildModels":
+          sendResponse(await suggestChildModels(tabId, msg.parentAlias, msg.candidateModels, msg.partial));
+          break;
         case "oms:searchMenus":
           sendResponse(await searchMenus(tabId, msg.term));
           break;
@@ -157,6 +242,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             modelsConfig: await getStoredModelsConfig(),
             defaults: DEFAULT_MODELS,
             viewMode: await getStoredViewMode(),
+            aliases: await getStoredAliases(),
           });
           break;
         case "oms:setModels":
@@ -165,6 +251,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           break;
         case "oms:setViewMode":
           await setStoredViewMode(msg.viewMode);
+          sendResponse({ ok: true });
+          break;
+        case "oms:setAliases":
+          await setStoredAliases(msg.aliases);
           sendResponse({ ok: true });
           break;
         default:

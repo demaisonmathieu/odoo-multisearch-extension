@@ -13,11 +13,17 @@ l'onglet actif (comme le fait l'extension Odoo Terminal) — aucune credential �
   construit dans un Shadow DOM (pas de collision CSS avec la page hôte) et centré en haut de
   l'écran, comme un command palette.
 - **Accès à Odoo** (`bridge.js`) : injecté dans le contexte JS de la page (MAIN world), il
-  s'accroche à `odoo.__WOWL_DEBUG__.root.env` — le point d'entrée exposé par le webclient Odoo
-  (OWL) dès qu'il est monté, même hors mode debug. La recherche appelle
-  `env.services.orm.searchCount(model, domain)` (domaine `OR` sur `display_name ilike` par
-  terme), et "Ouvrir" appelle `env.services.action.doAction(...)` pour naviguer directement vers
-  la liste filtrée dans l'onglet, comme un clic de menu Odoo.
+  s'accroche à l'`env` OWL du webclient dès qu'il est monté. Pour rester compatible avec
+  **n'importe quelle version d'Odoo** (testé conceptuellement de la v16 à la v19), deux méthodes
+  sont tentées dans l'ordre : `odoo.__WOWL_DEBUG__.root.env` (hook spécifique à Odoo, présent
+  depuis la v17) puis, en repli, `window.__OWL_DEVTOOLS__.apps` (hook générique du framework OWL
+  lui-même, présent identiquement dans toutes les versions d'OWL 2.x, y compris la v16 où le hook
+  Odoo n'existe pas encore). La recherche appelle `env.services.orm.searchCount(model, domain)`
+  (domaine `OR` sur `display_name ilike` par terme), et "Ouvrir" appelle
+  `env.services.action.doAction(...)` pour naviguer directement vers la liste filtrée dans
+  l'onglet, comme un clic de menu Odoo. Le `name_search` utilisé pour l'autocomplétion des
+  valeurs tente aussi automatiquement les deux signatures possibles (`domain` en v19+, `args`
+  avant), sans dépendre d'une détection de version.
 - **Orchestration** (`background.js`) : sert d'intermédiaire entre l'overlay (contexte isolé) et
   le bridge (MAIN world) via `chrome.runtime.sendMessage`, et garde la liste des modèles par
   défaut dans `chrome.storage.sync`.
@@ -82,6 +88,47 @@ le Ctrl+K natif d'Odoo avec son préfixe `/`. Les résultats affichent le chemin
 `env.services.menu.selectMenu(...)` — le même service que celui utilisé quand on clique un menu
 dans l'interface standard.
 
+### Ouvrir directement un ID : `/alias/id`
+
+Tapez `/` + un alias ou nom de modèle + `/` + un **nombre** (ex. `/projet/42`) puis `Entrée` :
+ouvre directement la fiche de cet enregistrement, sans passer par une recherche — pratique pour
+aller droit à un ID connu (vu dans une URL, un export, un log...).
+
+### Recherche liée : `/modèle/terme/modèle-lié`
+
+Tapez un chemin à **au moins 3 segments** séparés par `/` (ex. `/projets/sprinter/taches`) puis
+`Entrée` : la palette affiche **une ligne par enregistrement du premier modèle** qui correspond au
+terme, avec le nombre d'enregistrements du troisième modèle qui lui sont liés.
+
+Exemple : `/projets/sprinter/taches` cherche les `project.project` dont le nom contient
+"sprinter", puis pour chacun affiche le nombre de `project.task` liées (via le champ
+`project_id`), avec un bouton "Ouvrir" par ligne pour accéder directement aux tâches de ce
+projet précis.
+
+- Les noms de modèles (`projets`, `taches`...) sont résolus **dynamiquement** contre le nom
+  affiché de chaque modèle dans Odoo (`ir.model`), pas via un dictionnaire français codé en dur
+  — ça fonctionne donc quelle que soit la langue configurée sur l'instance. Le nom technique
+  exact (ex. `project.project`) fonctionne aussi directement.
+- Le lien entre les deux modèles est déduit automatiquement : le premier champ many2one du
+  troisième modèle qui pointe vers le premier modèle (limité à un lien direct, pas de chemin à
+  plusieurs sauts).
+- Seuls 3 segments sont supportés pour l'instant (un seul niveau de relation) ; un chemin plus
+  long renvoie une erreur explicite plutôt qu'un résultat silencieusement tronqué.
+
+**Autocomplétion pendant la frappe** : en tapant le 1ᵉʳ segment (après le `/`), une liste propose
+vos alias personnalisés (voir ci-dessous) et les modèles dont le nom affiché correspond. En tapant
+le 3ᵉ segment (après le 2ᵉ `/`), une liste propose les modèles qui ont effectivement un lien
+many2one vers le modèle résolu au 1ᵉʳ segment (ex. après `/projets/sprinter/`, elle propose
+`tâche`, `ticket d'assistance`... si ces modèles ont bien un champ pointant vers `project.project`
+— cette recherche de candidats est limitée aux modèles courants et à vos alias, pas à
+l'intégralité des modèles installés, pour rester rapide).
+
+**Alias personnalisés** : dans le sélecteur de modèles (⚙), une section "Alias de modèles" permet
+de définir des raccourcis (ex. `projet` → `project.project`) utilisés en priorité sur la
+résolution automatique par nom affiché — utile pour un raccourci plus court, ou pour lever une
+ambiguïté entre plusieurs modèles au nom proche. Stockés dans `chrome.storage.sync`, donc partagés
+comme le reste de la configuration.
+
 ### Critères avancés (domaine)
 
 L'icône 🔧 à côté de la barre de recherche ouvre un éditeur de critères, une ligne par critère,
@@ -102,6 +149,25 @@ valeurs séparées par virgule).
 Les valeurs numériques et `true`/`false` sont castées automatiquement, tout le reste est traité
 comme chaîne brute (les guillemets restent acceptés mais ne sont plus nécessaires puisque le
 champ valeur est déjà séparé de l'opérateur).
+
+**Autocomplétion des champs** : quand **un seul modèle** est sélectionné (les champs diffèrent
+d'un modèle à l'autre, donc pas d'autocomplétion possible avec plusieurs modèles à la fois), taper
+dans le champ "champ" propose la liste des champs du modèle via la liste déroulante native du
+navigateur — y compris les champs relationnels : taper `partner_id.` propose les champs de
+`res.partner`, `partner_id.category_id.` ceux de la catégorie, etc. (un niveau de relation résolu
+par point tapé). Chaque modèle interrogé (`fields_get`) est mis en cache dans la page tant que
+l'onglet Odoo n'est pas rechargé, pour ne pas déclencher une requête à chaque frappe.
+
+**Autocomplétion des valeurs** : une fois un champ saisi (toujours réservé au cas "un seul modèle
+sélectionné"), le champ "valeur" propose aussi des suggestions selon le type du champ :
+- champ à sélection (`selection`) → ses options possibles (`clé — libellé`) ;
+- champ booléen → `true` / `false` ;
+- champ relationnel (many2one...) → de vrais enregistrements existants (via `name_search`,
+  filtré par ce que vous tapez), mis en cache par (modèle lié, terme tapé) pour éviter de
+  requêter la base à chaque nouvelle frappe d'un terme déjà vu.
+
+Un champ texte libre (char, integer, date...) n'a pas d'ensemble de valeurs prédéfini : aucune
+suggestion n'est proposée dans ce cas, il faut taper la valeur directement.
 
 `Ctrl+Entrée` (ou `Cmd+Entrée` sur Mac) dans un champ/valeur lance la recherche, ou le bouton
 "Rechercher" sous les critères — utile quand le terme de recherche du haut est vide et que seuls
