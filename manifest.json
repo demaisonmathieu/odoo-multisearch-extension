@@ -12,8 +12,8 @@
   "commands": {
     "toggle-search": {
       "suggested_key": {
-        "default": "Ctrl+Shift+K",
-        "mac": "Command+Shift+K"
+        "default": "Ctrl+Shift+Y",
+        "mac": "Command+Shift+Y"
       },
       "description": "Ouvrir/fermer Odoo Multi-Search"
     }
@@ -23,5 +23,11 @@
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "odoo-multisearch@demaisonmathieu",
+      "strict_min_version": "128.0"
+    }
   }
 }

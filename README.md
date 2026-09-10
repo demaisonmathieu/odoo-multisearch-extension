@@ -6,9 +6,10 @@ l'onglet actif (comme le fait l'extension Odoo Terminal) — aucune credential �
 
 ## Comment ça marche
 
-- **Ouverture** : clic sur l'icône de l'extension, ou raccourci clavier `Ctrl+Shift+K`
-  (`Cmd+Shift+K` sur Mac, personnalisable dans `chrome://extensions/shortcuts`). Un second
-  déclenchement referme la palette. `Échap` ou un clic hors de la fenêtre ferme aussi.
+- **Ouverture** : clic sur l'icône de l'extension, ou raccourci clavier `Ctrl+Shift+Y`
+  (`Cmd+Shift+Y` sur Mac, personnalisable dans `chrome://extensions/shortcuts` sur Chrome, ou
+  `about:addons` → engrenage → "Gérer les raccourcis clavier des extensions" sur Firefox). Un
+  second déclenchement referme la palette. `Échap` ou un clic hors de la fenêtre ferme aussi.
 - **Overlay** (`overlay.js`) : injecté à la demande dans le contexte isolé de l'onglet actif,
   construit dans un Shadow DOM (pas de collision CSS avec la page hôte) et centré en haut de
   l'écran, comme un command palette.
@@ -67,10 +68,29 @@ git pull
 Puis retournez sur `chrome://extensions` et cliquez sur l'icône de rechargement (↻) de la carte
 de l'extension pour qu'elle reprenne les nouveaux fichiers.
 
+### Firefox (128 ou plus récent)
+
+L'extension fonctionne aussi sur Firefox, à partir de la version **128** (`strict_min_version`
+dans `manifest.json`) — la mécanique d'accès à Odoo repose sur
+`browser.scripting.executeScript({..., world: "MAIN"})`, que Firefox ne supporte que depuis cette
+version-là ; sur un Firefox plus ancien, l'extension se charge mais ne peut pas accéder à la page
+(statut "session non connectée" en permanence).
+
+1. Ouvrez `about:debugging#/runtime/this-firefox`.
+2. Cliquez sur **"Charger un module complémentaire temporaire"**.
+3. Sélectionnez le fichier `manifest.json` du dossier cloné/décompressé.
+
+⚠️ Un module complémentaire chargé ainsi est **temporaire** : il disparaît à la fermeture de
+Firefox et doit être rechargé à chaque redémarrage du navigateur (contrairement à Chrome, où le
+mode développeur garde l'extension chargée durablement). Pour une installation permanente, il
+faut soit la faire signer par Mozilla (AMO, en listing public ou en "self-distribution" non
+répertoriée), soit utiliser Firefox Developer Edition/Nightly avec la préférence
+`xpinstall.signatures.required` désactivée dans `about:config`.
+
 ## Utilisation
 
 1. Ouvrir un onglet sur une instance Odoo, être connecté.
-2. Cliquer sur l'icône de l'extension (ou `Ctrl+Shift+K`).
+2. Cliquer sur l'icône de l'extension (ou `Ctrl+Shift+Y`).
 3. Saisir un ou plusieurs termes puis `Entrée` (virgule = recherche OR), ou laisser le champ vide
    et appuyer sur `Entrée` pour afficher **tous** les enregistrements des modèles sélectionnés
    (aucun critère = domaine vide, pas une erreur).

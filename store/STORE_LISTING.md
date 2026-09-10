@@ -60,7 +60,7 @@ votre session.
 ⌨️ UTILISATION
 
 1. Ouvrez un onglet sur votre instance Odoo, connecté.
-2. Cliquez sur l'icône de l'extension, ou pressez Ctrl+Shift+K (Cmd+Shift+K sur Mac).
+2. Cliquez sur l'icône de l'extension, ou pressez Ctrl+Shift+Y (Cmd+Shift+Y sur Mac).
 3. Tapez un terme et validez avec Entrée — ou laissez vide pour tout afficher.
 4. Cliquez "Ouvrir" pour naviguer directement vers le résultat, dans la vue de votre choix
    (liste, kanban, ou fiche).
