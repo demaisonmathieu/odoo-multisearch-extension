@@ -100,14 +100,30 @@ Un chemin à exactement 2 segments se comporte différemment selon ce que contie
   d'abord, puis nom affiché) — utile pour cibler un modèle précis sans avoir à le cocher/décocher
   parmi les pastilles.
 
+### Export JSON : `/alias/id-ou-terme/json[/champ]`
+
+Ajoutez `/json` après un ID ou un terme de recherche pour afficher le(s) résultat(s) en JSON brut
+(toutes les valeurs de champs) au lieu du rendu habituel, avec un bouton "Copier". Ajoutez encore
+`/nom-du-champ` pour n'afficher que la valeur de ce champ, sans l'objet englobant :
+
+- `/projet/42/json` → toutes les valeurs de champs du projet #42 (un seul objet).
+- `/projet/42/json/name` → juste la valeur brute de ce champ pour ce projet (une chaîne, pas un
+  objet).
+- `/projet/phenix/json` → toutes les valeurs de champs de chaque projet dont le nom contient
+  "phenix" (un tableau d'objets, jusqu'à 50 résultats).
+- `/projet/phenix/json/name` → juste un tableau des valeurs de ce champ pour ces projets.
+
+Les champs de type `binary` (images, pièces jointes...) sont exclus du dump "tous les champs"
+(base64 illisible), sauf si demandés explicitement par leur nom.
+
 ### Recherche liée : `/modèle/terme/modèle-lié`
 
-Tapez un chemin à **au moins 3 segments** séparés par `/` (ex. `/projets/sprinter/taches`) puis
+Tapez un chemin à **au moins 3 segments** séparés par `/` (ex. `/projets/phenix/taches`) puis
 `Entrée` : la palette affiche **une ligne par enregistrement du premier modèle** qui correspond au
 terme, avec le nombre d'enregistrements du troisième modèle qui lui sont liés.
 
-Exemple : `/projets/sprinter/taches` cherche les `project.project` dont le nom contient
-"sprinter", puis pour chacun affiche le nombre de `project.task` liées (via le champ
+Exemple : `/projets/phenix/taches` cherche les `project.project` dont le nom contient
+"phenix", puis pour chacun affiche le nombre de `project.task` liées (via le champ
 `project_id`), avec un bouton "Ouvrir" par ligne pour accéder directement aux tâches de ce
 projet précis.
 
@@ -124,7 +140,7 @@ projet précis.
 **Autocomplétion pendant la frappe** : en tapant le 1ᵉʳ segment (après le `/`), une liste propose
 vos alias personnalisés (voir ci-dessous) et les modèles dont le nom affiché correspond. En tapant
 le 3ᵉ segment (après le 2ᵉ `/`), une liste propose les modèles qui ont effectivement un lien
-many2one vers le modèle résolu au 1ᵉʳ segment (ex. après `/projets/sprinter/`, elle propose
+many2one vers le modèle résolu au 1ᵉʳ segment (ex. après `/projets/phenix/`, elle propose
 `tâche`, `ticket d'assistance`... si ces modèles ont bien un champ pointant vers `project.project`
 — cette recherche de candidats est limitée aux modèles courants et à vos alias, pas à
 l'intégralité des modèles installés, pour rester rapide).
@@ -134,6 +150,13 @@ de définir des raccourcis (ex. `projet` → `project.project`) utilisés en pri
 résolution automatique par nom affiché — utile pour un raccourci plus court, ou pour lever une
 ambiguïté entre plusieurs modèles au nom proche. Stockés dans `chrome.storage.sync`, donc partagés
 comme le reste de la configuration.
+
+Un champ optionnel **"domaine par défaut"** (en JSON, ex. `[["active","=",true]]`) peut être
+associé à un alias : ce domaine est alors systématiquement combiné en ET avec la recherche,
+partout où l'alias est utilisé (`/alias/id`, `/alias/terme`, ou comme 1ᵉʳ/3ᵉ segment d'une
+recherche liée) — utile par ex. pour qu'un alias `client` ne cible que les partenaires actifs et
+marqués client (`[["active","=",true],["customer_rank",">",0]]`), sans avoir à le retaper à
+chaque recherche.
 
 ### Critères avancés (domaine)
 

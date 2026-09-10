@@ -59,6 +59,26 @@
       .trim();
   }
 
+  // aliasMap entries are either a plain model string (legacy / no default domain) or
+  // { model, domain } (set via the ⚙ settings' alias editor, `domain` being a default filter
+  // always applied when that alias is used, e.g. "actifs" -> { model: "res.partner", domain:
+  // [["active", "=", true]] }). This normalizes either shape to { model, domain }, or null if
+  // `alias` doesn't match a user-defined entry at all.
+  function getAliasEntry(alias, aliasMap) {
+    if (!aliasMap) {
+      return null;
+    }
+    const norm = normalizeAlias((alias || "").trim());
+    const entry = aliasMap[norm];
+    if (!entry) {
+      return null;
+    }
+    if (typeof entry === "string") {
+      return { model: entry, domain: [] };
+    }
+    return { model: entry.model, domain: Array.isArray(entry.domain) ? entry.domain : [] };
+  }
+
   // Resolves a free-typed path segment like "projets" or "taches" to an actual model technical
   // name, purely from what's already visible in the UI (ir.model's own display name) — no
   // hardcoded French/English dictionary, so this works in whatever language Odoo is configured
@@ -73,8 +93,9 @@
     const norm = normalizeAlias(raw);
     // User-defined alias (e.g. "projet" -> "project.project", set in the ⚙ settings) always
     // wins over the fuzzy display-name guess below — it's an explicit, unambiguous mapping.
-    if (aliasMap && aliasMap[norm] && allModels.some((m) => m.model === aliasMap[norm])) {
-      return aliasMap[norm];
+    const aliasEntry = getAliasEntry(raw, aliasMap);
+    if (aliasEntry && allModels.some((m) => m.model === aliasEntry.model)) {
+      return aliasEntry.model;
     }
     if (raw.includes(".") && allModels.some((m) => m.model === raw)) {
       return raw;
@@ -183,7 +204,66 @@
         if (!model) {
           return { error: `Aucun modèle ne correspond à "${modelAlias}".` };
         }
-        return await this.search([model], [["display_name", "ilike", term]]);
+        const aliasDomain = (getAliasEntry(modelAlias, aliasMap) || {}).domain || [];
+        return await this.search([model], [["display_name", "ilike", term]].concat(aliasDomain));
+      } catch (e) {
+        return { error: describeError(e) };
+      }
+    },
+
+    // "/alias/42/json" or "/alias/nomprojet/json" -> the record(s)' raw field values, as JSON.
+    // "/alias/.../json/champ" narrows it to just that one field's bare value(s) (no wrapping
+    // object) — a single value for the numeric-id form, an array of values for the term-search
+    // form (since that can match several records). Binary fields are excluded from the
+    // "all fields" dump (illegible base64 blobs) unless explicitly requested by name.
+    async jsonDump(modelAlias, idOrTerm, fieldName, aliasMap) {
+      const env = getEnv();
+      if (!env) {
+        return { error: "Odoo n'est pas chargé sur cet onglet." };
+      }
+      try {
+        const modelsRes = await this.listModels();
+        if (modelsRes.error) {
+          return modelsRes;
+        }
+        const model = resolveModelAlias(modelAlias, modelsRes.models, aliasMap);
+        if (!model) {
+          return { error: `Aucun modèle ne correspond à "${modelAlias}".` };
+        }
+        const aliasDomain = (getAliasEntry(modelAlias, aliasMap) || {}).domain || [];
+
+        const trimmed = (idOrTerm || "").trim();
+        const isSingleId = /^\d+$/.test(trimmed);
+        let ids;
+        if (isSingleId) {
+          ids = [Number(trimmed)];
+        } else {
+          const domain = [["display_name", "ilike", trimmed]].concat(aliasDomain);
+          ids = await env.services.orm.search(model, domain, { limit: 50 });
+          if (!ids.length) {
+            return { json: isSingleId ? null : [] };
+          }
+        }
+
+        let fields;
+        if (fieldName) {
+          fields = [fieldName];
+        } else {
+          const fieldsRes = await this.getFields(model);
+          if (fieldsRes.error) {
+            return fieldsRes;
+          }
+          fields = Object.entries(fieldsRes.fields)
+            .filter(([, meta]) => meta.type !== "binary")
+            .map(([name]) => name);
+        }
+
+        const records = await env.services.orm.read(model, ids, fields);
+        if (fieldName) {
+          const values = records.map((r) => (Object.prototype.hasOwnProperty.call(r, fieldName) ? r[fieldName] : null));
+          return { json: isSingleId ? (values.length ? values[0] : null) : values };
+        }
+        return { json: isSingleId ? records[0] || null : records };
       } catch (e) {
         return { error: describeError(e) };
       }
@@ -441,11 +521,13 @@
         if (!parentModel) {
           return { error: `Aucun modèle ne correspond à "${parts[0]}".` };
         }
+        const parentAliasDomain = (getAliasEntry(parts[0], aliasMap) || {}).domain || [];
         const term = parts[1];
         const childModel = resolveModelAlias(parts[2], allModels, aliasMap);
         if (!childModel) {
           return { error: `Aucun modèle ne correspond à "${parts[2]}".` };
         }
+        const childAliasDomain = (getAliasEntry(parts[2], aliasMap) || {}).domain || [];
 
         const relRes = await findRelationField(childModel, parentModel);
         if (relRes.error) {
@@ -460,7 +542,7 @@
 
         const parents = await env.services.orm.searchRead(
           parentModel,
-          [["display_name", "ilike", term]],
+          [["display_name", "ilike", term]].concat(parentAliasDomain),
           ["display_name"],
           { limit: 50 }
         );
@@ -473,7 +555,7 @@
         // seconds that feel like a hang" once there are more than a handful of matches.
         const rows = await Promise.all(
           parents.map(async (p) => {
-            const domain = [[relationField, "=", p.id]];
+            const domain = [[relationField, "=", p.id]].concat(childAliasDomain);
             const count = await env.services.orm.searchCount(childModel, domain);
             return { label: p.display_name, count, model: childModel, domain };
           })

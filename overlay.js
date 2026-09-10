@@ -298,6 +298,19 @@
       gap: 6px;
       flex-shrink: 0;
     }
+    .oms-json-output {
+      margin: 0 0 8px;
+      padding: 10px;
+      background: var(--hover);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-family: ui-monospace, monospace;
+      font-size: 11.5px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 320px;
+      overflow-y: auto;
+    }
     .oms-result-open {
       background: var(--accent);
       color: var(--accent-fg);
@@ -449,6 +462,26 @@
       font-weight: 600;
       cursor: pointer;
     }
+    .oms-alias-domain-input {
+      width: 100%;
+      margin-top: 6px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--fg);
+      font-family: ui-monospace, monospace;
+      font-size: 11.5px;
+      padding: 5px 6px;
+    }
+    .oms-alias-error {
+      color: var(--danger);
+      font-size: 11px;
+      margin-top: 4px;
+    }
+    .oms-alias-chip .oms-alias-domain {
+      color: var(--muted);
+      font-size: 10.5px;
+    }
   `;
 
   const host = document.createElement("div");
@@ -507,6 +540,14 @@
               <input type="text" id="oms-alias-new-model" placeholder="modèle (ex: project.project)" autocomplete="off" />
               <button type="button" id="oms-alias-add-btn">+</button>
             </div>
+            <input
+              type="text"
+              id="oms-alias-new-domain"
+              class="oms-alias-domain-input"
+              placeholder='domaine par défaut, JSON (optionnel) — ex: [["active","=",true]]'
+              autocomplete="off"
+            />
+            <div class="oms-alias-error hidden" id="oms-alias-error"></div>
           </div>
         </div>
       </div>
@@ -541,6 +582,8 @@
   const aliasNewAliasInput = shadow.getElementById("oms-alias-new-alias");
   const aliasNewModelInput = shadow.getElementById("oms-alias-new-model");
   const aliasAddBtn = shadow.getElementById("oms-alias-add-btn");
+  const aliasNewDomainInput = shadow.getElementById("oms-alias-new-domain");
+  const aliasErrorEl = shadow.getElementById("oms-alias-error");
 
   let modelAliases = {}; // { [normalizedAlias]: model } — user-defined path-search shortcuts
   let modelsConfig = {}; // { [model]: checkedByDefault } — the user's persisted configuration
@@ -963,6 +1006,11 @@
           ? runOpenById(segments[0].trim(), second)
           : runAliasSearch(segments[0].trim(), second);
       }
+      // "/alias/id-ou-terme/json[/champ]": raw JSON dump, checked before the generic 3-segment
+      // path-search below so "json" isn't mistaken for a related model name.
+      if (segments.length >= 3 && segments[2].trim().toLowerCase() === "json") {
+        return runJsonDump(segments[0].trim(), segments[1].trim(), segments[3] ? segments[3].trim() : null);
+      }
       if (segments.length >= 3) {
         return runPathSearch(segments);
       }
@@ -1032,6 +1080,45 @@
     }
     setStatus(`${res.results.length} modèle(s) interrogé(s).`, "ok");
     renderResults(res.results);
+  }
+
+  async function runJsonDump(modelAlias, idOrTerm, fieldName) {
+    setStatus("Récupération…");
+    resultsEl.innerHTML = "";
+    const res = await send({ type: "oms:jsonDump", modelAlias, idOrTerm, fieldName });
+    if (res && res.error) {
+      setStatus(res.error, "error");
+      return;
+    }
+    setStatus("OK", "ok");
+    renderJsonResult(res.json);
+  }
+
+  function renderJsonResult(value) {
+    resultsEl.innerHTML = "";
+    const text = JSON.stringify(value, null, 2);
+
+    const pre = document.createElement("pre");
+    pre.className = "oms-json-output";
+    pre.textContent = text;
+    resultsEl.appendChild(pre);
+
+    const copyBtn = document.createElement("button");
+    copyBtn.className = "oms-result-open";
+    copyBtn.textContent = "Copier";
+    copyBtn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(text);
+        copyBtn.textContent = "Copié !";
+        setTimeout(() => {
+          copyBtn.textContent = "Copier";
+        }, 1500);
+      } catch (e) {
+        // Clipboard API can be blocked in some contexts — the text is still selectable/copyable
+        // manually from the <pre> above, so fail silently here.
+      }
+    });
+    resultsEl.appendChild(copyBtn);
   }
 
   async function runPathSearch(segments) {
@@ -1270,12 +1357,20 @@
       aliasListEl.textContent = "Aucun alias défini.";
       return;
     }
-    for (const [alias, model] of entries.sort((a, b) => a[0].localeCompare(b[0]))) {
+    for (const [alias, value] of entries.sort((a, b) => a[0].localeCompare(b[0]))) {
+      const model = typeof value === "string" ? value : value.model;
+      const domain = typeof value === "string" ? [] : value.domain || [];
       const chip = document.createElement("div");
       chip.className = "oms-alias-chip";
       const text = document.createElement("span");
       text.textContent = `${alias} → ${model}`;
       chip.appendChild(text);
+      if (domain.length) {
+        const domainSpan = document.createElement("span");
+        domainSpan.className = "oms-alias-domain";
+        domainSpan.textContent = JSON.stringify(domain);
+        chip.appendChild(domainSpan);
+      }
       const removeBtn = document.createElement("button");
       removeBtn.type = "button";
       removeBtn.className = "oms-alias-remove";
@@ -1475,14 +1570,30 @@
   aliasAddBtn.addEventListener("click", async () => {
     const aliasRaw = aliasNewAliasInput.value.trim();
     const modelRaw = aliasNewModelInput.value.trim();
+    const domainRaw = aliasNewDomainInput.value.trim();
     if (!aliasRaw || !modelRaw) {
       return;
     }
+    let domain = [];
+    if (domainRaw) {
+      try {
+        domain = JSON.parse(domainRaw);
+        if (!Array.isArray(domain)) {
+          throw new Error("doit être un tableau, ex: [[\"active\",\"=\",true]]");
+        }
+      } catch (e) {
+        aliasErrorEl.textContent = "Domaine JSON invalide : " + ((e && e.message) || e);
+        aliasErrorEl.classList.remove("hidden");
+        return;
+      }
+    }
+    aliasErrorEl.classList.add("hidden");
     const key = normalizeAliasKey(aliasRaw);
-    modelAliases[key] = modelRaw;
+    modelAliases[key] = domain.length ? { model: modelRaw, domain } : modelRaw;
     await send({ type: "oms:setAliases", aliases: modelAliases });
     aliasNewAliasInput.value = "";
     aliasNewModelInput.value = "";
+    aliasNewDomainInput.value = "";
     renderAliasList();
   });
 
