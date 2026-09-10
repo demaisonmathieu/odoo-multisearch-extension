@@ -119,6 +119,18 @@ async function openByAlias(tabId, modelAlias, id) {
   return result;
 }
 
+async function aliasSearch(tabId, modelAlias, term) {
+  await ensureBridge(tabId);
+  const aliases = await getStoredAliases();
+  const [{ result }] = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: "MAIN",
+    func: (modelAlias, term, aliases) => window.__oms.aliasSearch(modelAlias, term, aliases),
+    args: [modelAlias, term, aliases],
+  });
+  return result;
+}
+
 async function suggestChildModels(tabId, parentAlias, candidateModels, partial) {
   await ensureBridge(tabId);
   const aliases = await getStoredAliases();
@@ -227,6 +239,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           break;
         case "oms:openByAlias":
           sendResponse(await openByAlias(tabId, msg.modelAlias, msg.id));
+          break;
+        case "oms:aliasSearch":
+          sendResponse(await aliasSearch(tabId, msg.modelAlias, msg.term));
           break;
         case "oms:suggestChildModels":
           sendResponse(await suggestChildModels(tabId, msg.parentAlias, msg.candidateModels, msg.partial));

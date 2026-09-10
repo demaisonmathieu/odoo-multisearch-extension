@@ -166,6 +166,29 @@
       return { results };
     },
 
+    // "/alias/nomprojet" (2 segments, 2nd one not purely numeric — see openByAlias for the
+    // numeric-id case) -> an ilike search on display_name, scoped to that one resolved model.
+    // Returns the same shape as search() above so the overlay can render it identically.
+    async aliasSearch(modelAlias, term, aliasMap) {
+      const env = getEnv();
+      if (!env) {
+        return { error: "Odoo n'est pas chargé sur cet onglet." };
+      }
+      try {
+        const modelsRes = await this.listModels();
+        if (modelsRes.error) {
+          return modelsRes;
+        }
+        const model = resolveModelAlias(modelAlias, modelsRes.models, aliasMap);
+        if (!model) {
+          return { error: `Aucun modèle ne correspond à "${modelAlias}".` };
+        }
+        return await this.search([model], [["display_name", "ilike", term]]);
+      } catch (e) {
+        return { error: describeError(e) };
+      }
+    },
+
     async listModels() {
       if (window.__omsModelsCache) {
         return { models: window.__omsModelsCache };

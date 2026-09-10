@@ -88,11 +88,17 @@ le Ctrl+K natif d'Odoo avec son préfixe `/`. Les résultats affichent le chemin
 `env.services.menu.selectMenu(...)` — le même service que celui utilisé quand on clique un menu
 dans l'interface standard.
 
-### Ouvrir directement un ID : `/alias/id`
+### Recherche ou ouverture sur un seul modèle : `/alias/valeur`
 
-Tapez `/` + un alias ou nom de modèle + `/` + un **nombre** (ex. `/projet/42`) puis `Entrée` :
-ouvre directement la fiche de cet enregistrement, sans passer par une recherche — pratique pour
-aller droit à un ID connu (vu dans une URL, un export, un log...).
+Un chemin à exactement 2 segments se comporte différemment selon ce que contient le second :
+
+- **Nombre** (ex. `/projet/42`) → ouvre directement la fiche de cet enregistrement, sans passer
+  par une recherche — pratique pour aller droit à un ID connu (vu dans une URL, un export, un
+  log...).
+- **Texte** (ex. `/projet/nomprojet`) → recherche `ilike` sur `display_name`, comme la barre de
+  recherche normale, mais restreinte à ce seul modèle (résolu comme partout ailleurs : alias
+  d'abord, puis nom affiché) — utile pour cibler un modèle précis sans avoir à le cocher/décocher
+  parmi les pastilles.
 
 ### Recherche liée : `/modèle/terme/modèle-lié`
 

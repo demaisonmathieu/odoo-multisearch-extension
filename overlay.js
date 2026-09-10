@@ -957,8 +957,11 @@
     if (rawValue.trim().startsWith("/")) {
       const path = rawValue.trim().slice(1);
       const segments = path.split("/");
-      if (segments.length === 2 && /^\d+$/.test(segments[1].trim())) {
-        return runOpenById(segments[0].trim(), segments[1].trim());
+      if (segments.length === 2) {
+        const second = segments[1].trim();
+        return /^\d+$/.test(second)
+          ? runOpenById(segments[0].trim(), second)
+          : runAliasSearch(segments[0].trim(), second);
       }
       if (segments.length >= 3) {
         return runPathSearch(segments);
@@ -1017,6 +1020,18 @@
       return;
     }
     close();
+  }
+
+  async function runAliasSearch(modelAlias, term) {
+    setStatus("Recherche en cours…");
+    resultsEl.innerHTML = "";
+    const res = await send({ type: "oms:aliasSearch", modelAlias, term });
+    if (res && res.error) {
+      setStatus(res.error, "error");
+      return;
+    }
+    setStatus(`${res.results.length} modèle(s) interrogé(s).`, "ok");
+    renderResults(res.results);
   }
 
   async function runPathSearch(segments) {
